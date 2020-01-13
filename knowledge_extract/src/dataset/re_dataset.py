@@ -12,10 +12,13 @@ import numpy as np
 import random
 import torch
 from tqdm import tqdm
+from src.utils import file_util
 
-id2predict, predict2id = json.load(open('../../data/pro_data/all_50_schemas.json', encoding='utf8', mode='r'))
+
+
+id2predict, predict2id = json.load(open(file_util.get_project_path() + './data/pro_data/all_50_schemas.json', encoding='utf8', mode='r'))
 num_classes = len(id2predict)
-tokenizer = BertTokenizer('../../bert_model/vocab.txt')
+tokenizer = BertTokenizer(file_util.get_project_path() + './bert_model/vocab.txt')
 
 
 # 得到attention mask
@@ -118,12 +121,14 @@ class RE_Dataset(Dataset):
         self.TOKEN_LIST = torch.from_numpy(np.array(token_ids_list)).long()
         self.TOKEN_ATTEN_MASK_LIST = torch.from_numpy(np.array(token_atten_mask_list)).long()
         self.SEQ_TYPE_LIST = torch.from_numpy(np.array(seq_type_list)).long()
-        self.S_START_TOKEN = torch.from_numpy(np.array(s_start_token)).long()
-        self.S_END_TOKEN = torch.from_numpy(np.array(s_end_token)).long()
+
         self.S_POS_START_INDEX = torch.from_numpy(np.array(s_pos_start_index)).long()
         self.S_POS_END_INDEX = torch.from_numpy(np.array(s_pos_end_index)).long()
-        self.O_START_TOKEN = torch.from_numpy(np.array(o_start_token)).long()
-        self.O_END_TOKEN = torch.from_numpy(np.array(o_end_token)).long()
+
+        self.S_START_TOKEN = torch.from_numpy(np.array(s_start_token)).float()
+        self.S_END_TOKEN = torch.from_numpy(np.array(s_end_token)).float()
+        self.O_START_TOKEN = torch.from_numpy(np.array(o_start_token)).float()
+        self.O_END_TOKEN = torch.from_numpy(np.array(o_end_token)).float()
 
     def __len__(self):
         return self.TOKEN_LIST.shape[0]

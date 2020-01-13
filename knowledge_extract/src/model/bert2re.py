@@ -5,15 +5,14 @@
 # @Site    : 
 # @File    : bert2re.py
 # @Software: PyCharm
-from transformers import BertConfig, BertModel
 import torch
 import torch.nn as nn
 from transformers import BertConfig, BertModel
 import numpy as np
+from src.utils import file_util
 
 
 class REModel(nn.Module):
-
 
     def __batch_gather(self, data:torch.Tensor, index:torch.Tensor):
         length = index.shape[0]
@@ -26,14 +25,9 @@ class REModel(nn.Module):
         return torch.from_numpy(np.array(result))
 
 
-
-
-
-
-
     def __init__(self, bert_conf: BertConfig):
         super(REModel, self).__init__()
-        self.bert = BertModel.from_pretrained('../../bert_model/pytorch_model.bin', config=bert_conf)
+        self.bert = BertModel.from_pretrained(file_util.get_project_path() + './bert_model/pytorch_model.bin', config=bert_conf)
         # subject 开始位置
         self.subject_start_cls = nn.Sequential(
             nn.Dropout(bert_conf.hidden_dropout_prob),
