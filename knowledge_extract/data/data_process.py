@@ -53,11 +53,12 @@ def repair(d):
                 continue
         spo_list.append(tuple(sp))
     d['spo_list'] = spo_list
-
+max_length = 0
 with open('./source_data/train_data.json', mode='rb') as f:
     for l in tqdm(f, desc='process train data'):
         a = json.loads(l)
-
+        if len(a['text']) > max_length:
+            max_length = len(a['text'])
         if not a['spo_list']:
             continue
         a = {
@@ -69,9 +70,12 @@ with open('./source_data/train_data.json', mode='rb') as f:
 
         for c in a['text']:
             chars[c] = chars.get(c, 0) + 1
-
+print('max_length:{}'.format(max_length))
 with codecs.open('./pro_data/train_data.json', mode='w', encoding='utf8') as f:
     json.dump(train_data_list, f, indent=4, ensure_ascii=False)
+
+with codecs.open('./pro_data/train_data-sim.json', mode='w', encoding='utf8') as f:
+    json.dump(train_data_list[:100000], f, indent=4, ensure_ascii=False)
 
 # with codecs.open('./pro_data/train_data-sim.json', mode='w', encoding='utf8') as f:
 #     json.dump(train_data_list[:1000], f, indent=4, ensure_ascii=False)

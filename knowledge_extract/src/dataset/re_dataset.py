@@ -36,7 +36,7 @@ class RE_Dataset(Dataset):
                 return i
         return -1
 
-    def __init__(self, file_path, max_length=256):
+    def __init__(self, file_path, max_length=256, device = None):
         source_data = json.load(open(file_path, mode='r', encoding='utf8'))
         # 字符索引
         token_ids_list = []

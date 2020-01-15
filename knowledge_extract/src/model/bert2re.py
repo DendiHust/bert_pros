@@ -14,20 +14,21 @@ from src.utils import file_util
 
 class REModel(nn.Module):
 
-    def __batch_gather(self, data:torch.Tensor, index:torch.Tensor):
+    def __batch_gather(self, data: torch.Tensor, index: torch.Tensor):
         length = index.shape[0]
-        t_index = index.data.numpy()
-        t_data = data.data.numpy()
+        t_index = index.data.cpu().numpy()
+        t_data = data.data.cpu().numpy()
         result = []
         for i in range(length):
             result.append(t_data[i, t_index[i], :])
 
-        return torch.from_numpy(np.array(result))
+        return torch.from_numpy(np.array(result)).to(self.device)
 
-
-    def __init__(self, bert_conf: BertConfig):
+    def __init__(self, bert_conf: BertConfig, device = None):
+        self.device = device
         super(REModel, self).__init__()
-        self.bert = BertModel.from_pretrained(file_util.get_project_path() + './bert_model/pytorch_model.bin', config=bert_conf)
+        self.bert = BertModel.from_pretrained(file_util.get_project_path() + './bert_model/pytorch_model.bin',
+                                              config=bert_conf)
         # subject 开始位置
         self.subject_start_cls = nn.Sequential(
             nn.Dropout(bert_conf.hidden_dropout_prob),
@@ -58,7 +59,7 @@ class REModel(nn.Module):
 
     def forward(self, subject_start_pos_index=None, subject_end_pos_index=None, input_ids=None, attention_mask=None,
                 token_type_ids=None,
-                position_ids=None, head_mask=None, inputs_embeds=None, labels=None):
+                position_ids=None, head_mask=None, inputs_embeds=None):
         outputs = self.bert(input_ids,
                             attention_mask=attention_mask,
                             token_type_ids=token_type_ids,
@@ -69,6 +70,10 @@ class REModel(nn.Module):
         #
         s1 = self.subject_start_cls(bert_output)
         s2 = self.subject_end_cls(bert_output)
+        # 使用的时候，预测subject的位置
+        if subject_start_pos_index is None or subject_end_pos_index is None:
+            return s1, s2
+
         # 获得k1，k2
         s_k1 = self.__batch_gather(bert_output, subject_start_pos_index)
         s_k2 = self.__batch_gather(bert_output, subject_end_pos_index)
@@ -84,11 +89,21 @@ class REModel(nn.Module):
         # s_k1 = torch.gather(outputs[0], 1, subject_start_pos_index)
         # s_k2 = torch.gather(outputs[0], 1, subject_end_pos_index)
 
-        #
-
         return s1, s2, o1, o2
 
-
+    # def get_subject_index(self, input_ids=None, attention_mask=None, token_type_ids=None, position_ids=None,
+    #                       head_mask=None, inputs_embeds=None):
+    #     outputs = self.bert(input_ids,
+    #                         attention_mask=attention_mask,
+    #                         token_type_ids=token_type_ids,
+    #                         position_ids=position_ids,
+    #                         head_mask=head_mask,
+    #                         inputs_embeds=inputs_embeds)
+    #     bert_output = outputs[0]
+    #     #
+    #     s1 = self.subject_start_cls(bert_output)
+    #     s2 = self.subject_end_cls(bert_output)
+    #     return s1, s2
 
 
 if __name__ == '__main__':
@@ -110,12 +125,3 @@ if __name__ == '__main__':
             'subject_end_pos_index': batch[4]
         }
         outputs = re_model(**inputs)
-
-
-
-
-
-
-
-
-
