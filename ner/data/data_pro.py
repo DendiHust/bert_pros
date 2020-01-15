@@ -11,6 +11,8 @@ from tqdm import tqdm
 label_set = set()
 
 train_dataset = []
+
+max_length = 0
 with open('./example.train', mode='r', encoding='utf8')  as f:
     text_tmp = []
     label_tmp = []
@@ -18,6 +20,8 @@ with open('./example.train', mode='r', encoding='utf8')  as f:
         line = line.strip()
         item_list = line.split(' ')
         if len(item_list) < 2:
+            if len(text_tmp) > max_length:
+                max_length = len(text_tmp)
             train_dataset.append({'text': ''.join(text_tmp), 'label': label_tmp})
             text_tmp = []
             label_tmp = []
@@ -26,12 +30,17 @@ with open('./example.train', mode='r', encoding='utf8')  as f:
             label_tmp.append(item_list[1])
             label_set.add(item_list[1])
 
+print(max_length)
+
 with open('./train.json', mode='w', encoding='utf8') as f:
     json.dump(train_dataset, f, indent=4, ensure_ascii=False)
+
+label_length = 0
 
 with open('./label.json', mode='w', encoding='utf8') as f:
     label2id = {i: j for i, j in enumerate(label_set)}
     id2label = {j: i for i, j in label2id.items()}
+    label_length = len(label2id)
     json.dump([label2id, id2label], f, indent=4, ensure_ascii=False)
 
 test_dataset = []
@@ -71,3 +80,10 @@ with open('./example.dev', mode='r', encoding='utf8')  as f:
 
 with open('./dev.json', mode='w', encoding='utf8') as f:
     json.dump(dev_dataset, f, indent=4, ensure_ascii=False)
+
+with open('./length.json', mode='w', encoding='utf8') as f:
+    a = {
+        'text_max_length': max_length,
+        'label_length': label_length
+    }
+    json.dump(a, f, indent=4, ensure_ascii=False)
