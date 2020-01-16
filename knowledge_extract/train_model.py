@@ -19,10 +19,10 @@ import json
 import codecs
 
 lr = 1e-5
-batch_size = 8
-max_length = 256
+batch_size = 6
+max_length = 200
 cuda = True
-epoches = 20
+epoches = 50
 train_data_path = file_util.get_project_path() + './data/pro_data/train_data-sim.json'
 eval_data_path = file_util.get_project_path() + './data/pro_data/dev_data.json'
 
@@ -114,14 +114,18 @@ def extract_items(text, model: REModel, device=None):
         # print('o_start shape:{}'.format(o_start.shape))
         # print('o_end shape:{}'.format(o_end.shape))
         for i, s in enumerate(subject):
+            if s[0] == 0 or s[1] == 0:
+                continue
             o1 = np.where(o_start[i] > 0.5)
             o2 = np.where(o_end[i] > 0.5)
             # print('{}:o1 len:{}'.format(i, len(o1[0])))
             # print('{}:o2 len:{}'.format(i, len(o2[0])))
             for _o1, _c1 in zip(*o1):
+                if _o1 == 0:
+                    continue
                 for _o2, _c2 in zip(*o2):
                     if _o2 >= _o1 and _c1 == _c2:
-                        spos.append(((s[0], s[1]), _c1, (_o1, _o2)))
+                        spos.append(((s[0] - 1, s[1] - 1), _c1, (_o1 - 1, _o2 - 1)))
                         break
 
     return [SPO((text[s[0]: s[1] + 1], id2predict[str(p)], (text[o[0]: o[1] + 1]))) for s, p, o in spos]
@@ -143,6 +147,7 @@ def train_func(train_dataset: RE_Dataset, model: REModel, optimizer, criterion: 
     model.train()
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
+    print(len(train_dataloader))
     losses = 0.0
     steps = 0
     for step, batch in tqdm(enumerate(train_dataloader), desc='train process'):
@@ -226,6 +231,7 @@ def evaluate_func(eval_data_file_path, model: REModel, device=None):
     f = codecs.open(file_util.get_project_path() + './dev_pred.json', 'w', encoding='utf-8')
     f1, precision, recall = 0.0, 0.0, 0.0
     pbar = tqdm()
+    result_list = []
     for data in tqdm(eval_data, desc='eval data'):
         spo_pre_list = extract_items(data['text'], model, device)
         # print('pre:{}'.format(spo_pre_list))
@@ -238,21 +244,20 @@ def evaluate_func(eval_data_file_path, model: REModel, device=None):
         Y += len(R)
         Z += len(T)
         f1, precision, recall = 2 * X / (Y + Z), X / Y, X / Z
-        # pbar.update()
-        # pbar.set_description('f1: %.5f, precision: %.5f, recall: %.5f' %
-        #                      (f1, precision, recall))
-        s = json.dumps(
-            {
+        pbar.update()
+        pbar.set_description('f1: %.5f, precision: %.5f, recall: %.5f' %
+                             (f1, precision, recall))
+        s = {
                 'text': data['text'],
                 'spo_list': list(T),
                 'spo_list_pred': list(R),
                 'new': list(R - T),
                 'lack': list(T - R),
-            },
-            ensure_ascii=False,
-            indent=4)
+            }
+        result_list.append(s)
         f.write(s + '\n')
     pbar.close()
+    json.dump(result_list, f, indent=4, ensure_ascii=False)
     f.close()
     # print(X)
     return f1, precision, recall
@@ -296,7 +301,7 @@ if __name__ == '__main__':
 
         logger.info('Epoch: {:02} | Time: {}m {}s'.format(e, epoch_mins, epoch_secs))
         logger.info(
-            '\tTrain Loss: {:.6f} | Eval F1: {:.6f} | Eval Pre: {:.6f} | Eval Pre: {:.6f}'.format(train_losses, f1,
+            '\tTrain Loss: {:.6f} | Eval F1: {:.6f} | Eval Pre: {:.6f} | Eval Cal: {:.6f}'.format(train_losses, f1,
                                                                                                   precision, recall))
 
     # train_func(train_dataset, re_model, optimizer=optimizer, criterion=bce_loss, batch_size=batch_size)

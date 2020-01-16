@@ -94,13 +94,13 @@ with open('./source_data/dev_data.json', mode='rb') as f:
             'spo_list': [[item['subject'], item['predicate'], item['object']] for item in a['spo_list']]
         }
         repair(a)
-        train_data_list.append(a)
+        dev_data_list.append(a)
 
         for c in a['text']:
             chars[c] = chars.get(c, 0) + 1
 
 with codecs.open('./pro_data/dev_data.json', mode='w', encoding='utf8') as f:
-    json.dump(train_data_list, f, indent=4, ensure_ascii=False)
+    json.dump(dev_data_list, f, indent=4, ensure_ascii=False)
 
 with codecs.open('./pro_data/all_chars.json', mode='w', encoding='utf8') as f:
     chars = {i: j for i, j in chars.items() if j >= min_count}
