@@ -18,14 +18,13 @@ import numpy as np
 import json
 import codecs
 
-lr = 1e-5
-batch_size = 6
-max_length = 200
+lr = 5e-5
+batch_size = 8
+max_length = 160
 cuda = True
 epoches = 50
 train_data_path = file_util.get_project_path() + './data/pro_data/train_data-sim.json'
 eval_data_path = file_util.get_project_path() + './data/pro_data/dev_data.json'
-
 
 tokenizer = BertTokenizer(file_util.get_project_path() + './bert_model/vocab.txt')
 id2predict, predict2id = json.load(
@@ -88,12 +87,14 @@ def extract_items(text, model: REModel, device=None):
         subject_end_o = torch.from_numpy(subject_end_o).long()
 
         o_data_set = TensorDataset(token_ids_o, token_attn_mask_o, token_seq_type_o, subject_start_o, subject_end_o)
-        o_data_loader = DataLoader(o_data_set, batch_size=batch_size)
+        o_data_loader = DataLoader(o_data_set, batch_size=int(batch_size / 2))
 
         is_first = True
         o_start = None
         o_end = None
         for batch in o_data_loader:
+            if cuda:
+                torch.cuda.empty_cache()
             inputs = {
                 'input_ids': batch[0].to(device),
                 'attention_mask': batch[1].to(device),
@@ -103,18 +104,21 @@ def extract_items(text, model: REModel, device=None):
             }
             if is_first:
                 _, _, o_start, o_end = model(**inputs)
+                o_start = o_start.to(torch.device('cpu'))
                 is_first = False
             else:
                 _, _, o_tmp_start, o_tmp_end = model(**inputs)
+                o_tmp_start = o_tmp_start.to(torch.device('cpu'))
+                o_tmp_end = o_tmp_end.to(torch.device('cpu'))
                 o_start = torch.cat((o_start, o_tmp_start), dim=0)
                 o_end = torch.cat((o_end, o_tmp_end), dim=0)
 
-        o_start = o_start.data.cpu().numpy()
-        o_end = o_end.data.cpu().numpy()
+        o_start = o_start.data.numpy()
+        o_end = o_end.data.numpy()
         # print('o_start shape:{}'.format(o_start.shape))
         # print('o_end shape:{}'.format(o_end.shape))
         for i, s in enumerate(subject):
-            if s[0] == 0 or s[1] == 0:
+            if s[0] == 0 or s[1] == 0 or len(text[s[0]: s[1] + 1]) == 0:
                 continue
             o1 = np.where(o_start[i] > 0.5)
             o2 = np.where(o_end[i] > 0.5)
@@ -143,7 +147,8 @@ class SPO(tuple):
         return self.spo == other
 
 
-def train_func(train_dataset: RE_Dataset, model: REModel, optimizer, criterion: nn.BCELoss, batch_size=batch_size, device = None):
+def train_func(train_dataset: RE_Dataset, model: REModel, optimizer, criterion: nn.BCELoss, batch_size=batch_size,
+               device=None):
     model.train()
     train_sampler = RandomSampler(train_dataset)
     train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
@@ -151,6 +156,8 @@ def train_func(train_dataset: RE_Dataset, model: REModel, optimizer, criterion: 
     losses = 0.0
     steps = 0
     for step, batch in tqdm(enumerate(train_dataloader), desc='train process'):
+        if cuda:
+            torch.cuda.empty_cache()
         # 模型输入
         token_ids = batch[0]
         token_attn_mask = batch[1]
@@ -248,14 +255,14 @@ def evaluate_func(eval_data_file_path, model: REModel, device=None):
         pbar.set_description('f1: %.5f, precision: %.5f, recall: %.5f' %
                              (f1, precision, recall))
         s = {
-                'text': data['text'],
-                'spo_list': list(T),
-                'spo_list_pred': list(R),
-                'new': list(R - T),
-                'lack': list(T - R),
-            }
+            'text': data['text'],
+            'spo_list': list(T),
+            'spo_list_pred': list(R),
+            'new': list(R - T),
+            'lack': list(T - R),
+        }
         result_list.append(s)
-        f.write(s + '\n')
+        # f.write(s + '\n')
     pbar.close()
     json.dump(result_list, f, indent=4, ensure_ascii=False)
     f.close()
@@ -275,7 +282,6 @@ if __name__ == '__main__':
     # t1 = set([SPO(('喜剧之王', '主演', '周星驰'))])
     # t2 = set([SPO(('好', '董事长', '我修养》《喜剧')),SPO(('喜剧之王', '主演', '周星驰'))])
     # print(t1 & t2)
-
 
     device = torch.device('cuda' if cuda else 'cpu')
     train_dataset = RE_Dataset(train_data_path, max_length=max_length, device=device)

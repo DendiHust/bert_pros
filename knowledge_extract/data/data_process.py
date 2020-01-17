@@ -9,6 +9,7 @@ import json
 from tqdm import tqdm
 import codecs
 import re
+import numpy as np
 
 all_50_schemas = set()
 
@@ -71,8 +72,14 @@ with open('./source_data/train_data.json', mode='rb') as f:
         for c in a['text']:
             chars[c] = chars.get(c, 0) + 1
 print('max_length:{}'.format(max_length))
+
 with codecs.open('./pro_data/train_data.json', mode='w', encoding='utf8') as f:
     json.dump(train_data_list, f, indent=4, ensure_ascii=False)
+
+train_data_list = np.array(train_data_list)
+# 打乱顺序
+np.random.shuffle(train_data_list)
+train_data_list = list(train_data_list)
 
 with codecs.open('./pro_data/train_data-sim.json', mode='w', encoding='utf8') as f:
     json.dump(train_data_list[:100000], f, indent=4, ensure_ascii=False)
