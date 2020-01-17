@@ -18,12 +18,13 @@ import numpy as np
 import json
 import codecs
 
-lr = 1e-5
-batch_size = 6
-max_length = 200
+lr = 5e-5
+batch_size = 10
+max_length = 160
 cuda = True
 epoches = 50
 train_data_path = file_util.get_project_path() + './data/pro_data/train_data-sim.json'
+# train_data_path = file_util.get_project_path() + './data/pro_data/dev_data.json'
 eval_data_path = file_util.get_project_path() + './data/pro_data/dev_data.json'
 
 
@@ -94,7 +95,9 @@ def extract_items(text, model: REModel, device=None):
         o_start = None
         o_end = None
         for batch in o_data_loader:
-            inputs = {
+            if cuda:
+                torch.cuda.empty_cache()
+            o_inputs = {
                 'input_ids': batch[0].to(device),
                 'attention_mask': batch[1].to(device),
                 'token_type_ids': batch[2].to(device),
@@ -102,19 +105,31 @@ def extract_items(text, model: REModel, device=None):
                 'subject_end_pos_index': batch[4].to(device)
             }
             if is_first:
-                _, _, o_start, o_end = model(**inputs)
+                _, _, o_start, o_end = model(**o_inputs)
+                o_start = o_start.cpu().detach().numpy()
+                o_end = o_end.cpu().detach().numpy()
                 is_first = False
+                del o_inputs
             else:
-                _, _, o_tmp_start, o_tmp_end = model(**inputs)
-                o_start = torch.cat((o_start, o_tmp_start), dim=0)
-                o_end = torch.cat((o_end, o_tmp_end), dim=0)
+                # logger.info(batch[0].shape)
+                _, _, o_tmp_start, o_tmp_end = model(**o_inputs)
+                o_tmp_start = o_tmp_start.cpu().detach().numpy()
+                o_tmp_end = o_tmp_end.cpu().detach().numpy()
+                o_start = np.concatenate((o_start, o_tmp_start), axis=0)
+                o_end = np.concatenate((o_end, o_tmp_end), axis=0)
+                # print(o_tmp_start.device)
+                # time.sleep(1)
+                del o_tmp_start
+                del o_tmp_end
+                del batch
+                del o_inputs
 
-        o_start = o_start.data.cpu().numpy()
-        o_end = o_end.data.cpu().numpy()
+        # o_start = o_start.data.cpu().numpy()
+        # o_end = o_end.data.cpu().numpy()
         # print('o_start shape:{}'.format(o_start.shape))
         # print('o_end shape:{}'.format(o_end.shape))
         for i, s in enumerate(subject):
-            if s[0] == 0 or s[1] == 0:
+            if s[0] == 0 or s[1] == 0 or len(text[s[0]: s[1] + 1]) == 0:
                 continue
             o1 = np.where(o_start[i] > 0.5)
             o2 = np.where(o_end[i] > 0.5)
@@ -144,13 +159,17 @@ class SPO(tuple):
 
 
 def train_func(train_dataset: RE_Dataset, model: REModel, optimizer, criterion: nn.BCELoss, batch_size=batch_size, device = None):
+
     model.train()
-    train_sampler = RandomSampler(train_dataset)
-    train_dataloader = DataLoader(train_dataset, sampler=train_sampler, batch_size=batch_size)
-    print(len(train_dataloader))
+    # train_sampler = RandomSampler(train_dataset)
+    train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=batch_size)
+    logger.info(len(train_dataloader))
     losses = 0.0
     steps = 0
     for step, batch in tqdm(enumerate(train_dataloader), desc='train process'):
+        # logger.info(batch[0].shape)
+        if cuda:
+            torch.cuda.empty_cache()
         # 模型输入
         token_ids = batch[0]
         token_attn_mask = batch[1]
@@ -226,6 +245,7 @@ def train_func(train_dataset: RE_Dataset, model: REModel, optimizer, criterion: 
 
 
 def evaluate_func(eval_data_file_path, model: REModel, device=None):
+
     eval_data = json.load(open(eval_data_file_path, mode='r', encoding='utf8'))
     X, Y, Z = 1e-10, 1e-10, 1e-10
     f = codecs.open(file_util.get_project_path() + './dev_pred.json', 'w', encoding='utf-8')
@@ -255,7 +275,7 @@ def evaluate_func(eval_data_file_path, model: REModel, device=None):
                 'lack': list(T - R),
             }
         result_list.append(s)
-        f.write(s + '\n')
+        # f.write(s + '\n')
     pbar.close()
     json.dump(result_list, f, indent=4, ensure_ascii=False)
     f.close()
