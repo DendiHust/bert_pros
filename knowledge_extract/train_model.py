@@ -105,6 +105,7 @@ def extract_items(text, model: REModel, device=None):
             if is_first:
                 _, _, o_start, o_end = model(**inputs)
                 o_start = o_start.to(torch.device('cpu'))
+                o_end = o_end.to(torch.device('cpu'))
                 is_first = False
             else:
                 _, _, o_tmp_start, o_tmp_end = model(**inputs)
